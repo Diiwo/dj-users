@@ -1,12 +1,14 @@
+from django.db import transaction
 from django.contrib.auth import get_user_model
-from rest_framework.exceptions import PermissionDenied
 
+from rest_framework.exceptions import PermissionDenied, ValidationError
+
+from dj_users.application.constants.messages import validation_messages
+from dj_users.application.domain.roles import UserRole
+from dj_users.application.utils.privileges import has_admin_privileges
 from dj_users.infrastructure.models import (
     DoctorProfile, PatientProfile, NurseProfile
 )
-from dj_users.application.domain.roles import UserRole
-from dj_users.application.utils.privileges import has_admin_privileges
-
 
 User = get_user_model()
 
@@ -20,24 +22,30 @@ def register_user(validated_data: dict, request_user=None):
     if role in [UserRole.DOCTOR, UserRole.NURSE, UserRole.PATIENT]:
         if not has_admin_privileges(request_user):
             raise PermissionDenied(
-                "Solo usuarios administradores pueden registrar un perfil."
+                validation_messages.ONLY_ADMIN_CAN_REGISTER_PROFILES
             )
 
-    user = User.objects.create_user(
-        username=username,
-        email=email,
-        password=password,
-        user_type=role
-    )
+    with transaction.atomic():
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            user_type=role
+        )
 
-    profile_model_map = {
-        UserRole.DOCTOR: DoctorProfile,
-        UserRole.PATIENT: PatientProfile,
-        UserRole.NURSE: NurseProfile
-    }
+        profile_model_map = {
+            UserRole.DOCTOR: DoctorProfile,
+            UserRole.PATIENT: PatientProfile,
+            UserRole.NURSE: NurseProfile
+        }
 
-    profile_model = profile_model_map.get(role)
-    if profile_model:
-        profile_model.objects.create(user=user)
+        if role not in profile_model_map:
+            raise ValidationError(
+                validation_messages.ROL_NOT_PERMITED
+            )
+
+        profile_model = profile_model_map.get(role)
+        if profile_model:
+            profile_model.objects.create(user=user)
 
     return user

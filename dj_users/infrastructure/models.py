@@ -2,6 +2,7 @@ import uuid
 
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils.translation import gettext_lazy as _
 
 from dj_users.application.constants.blood_types import BLOOD_TYPES
 from dj_users.application.domain.roles import UserRole
@@ -25,11 +26,21 @@ class CustomUser(AbstractUser, CoreBaseModel):
 
     class Meta:
         app_label = 'dj_users'
-        verbose_name = 'Usuario'
-        verbose_name_plural = 'Usuarios'
+        verbose_name = _('Usuario')
+        verbose_name_plural = _('Usuarios')
 
     def __str__(self):
         return f'{self.username}'
+
+
+class Clinic(CoreBaseModel):
+    name = models.CharField(max_length=100)
+    owner = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    address = models.CharField(max_length=255, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+
+    def __str__(self):
+        return self.name
 
 
 class DoctorProfile(CoreBaseModel):
@@ -38,18 +49,28 @@ class DoctorProfile(CoreBaseModel):
         on_delete=models.CASCADE,
         related_name='doctor_data'
     )
-    specialty = models.CharField(max_length=100)
+    specialty = models.ForeignKey(
+        "dj_catalogs.Specialty",
+        on_delete=models.PROTECT,
+        null=True
+    )
     license_number = models.CharField(max_length=50)
     kit_accepted = models.BooleanField(default=False)
     professional_license = models.CharField(max_length=50)
     verificated = models.BooleanField(default=False)
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='doctors'
+    )
 
     def __str__(self):
-        return f'Dr. {self.user.get_full_name()}'
+        return _('Dr. %(fullname)s') % {'fullname': self.user.get_full_name()}
 
     class Meta:
         app_label = 'dj_users'
-        verbose_name = 'Perfil de médico'
+        verbose_name = _('Perfil de médico')
 
 
 class PatientProfile(CoreBaseModel):
@@ -61,19 +82,16 @@ class PatientProfile(CoreBaseModel):
     blood_type = models.CharField(
         max_length=3,
         choices=BLOOD_TYPES,
-        blank=True)
-    allergies = models.TextField(blank=True)
-    conditions = models.TextField(blank=True)
-    weight = models.DecimalField(max_digits=5, decimal_places=2, null=True)
-    height = models.DecimalField(max_digits=5, decimal_places=2, null=True)
+        blank=True
+    )
 
     class Meta:
         app_label = 'dj_users'
-        verbose_name = 'Perfil de paciente'
-        verbose_name_plural = 'Perfil de pacientes'
+        verbose_name = _('Perfil de paciente')
+        verbose_name_plural = _('Perfil de pacientes')
 
     def __str__(self):
-        return f'Paciente: {self.user.username}'
+        return _('Paciente: %(username)s') % {'username': self.user.username}
 
 
 class NurseProfile(CoreBaseModel):
@@ -85,8 +103,8 @@ class NurseProfile(CoreBaseModel):
 
     class Meta:
         app_label = 'dj_users'
-        verbose_name = 'Perfil de enfermera'
-        verbose_name_plural = 'Perfil de enfermeras'
+        verbose_name = _('Perfil de enfermera')
+        verbose_name_plural = _('Perfil de enfermeras')
 
     def __str__(self):
-        return f'Enfermero: {self.user.username}'
+        return _('Enfermero: %(username)s') % {'username': self.user.username}

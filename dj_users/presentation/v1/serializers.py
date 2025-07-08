@@ -1,13 +1,20 @@
+
 from rest_framework import serializers
 
+from dj_users.application.constants.messages import validation_messages
 from dj_users.application.domain.roles import UserRole
 from dj_users.infrastructure.models import (
     CustomUser,
     DoctorProfile,
     PatientProfile,
-    NurseProfile
+    NurseProfile,
+    Clinic
 )
 
+
+# ======================================================================
+# Base Serializers (ModelSerializers simples)
+# ======================================================================
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -16,9 +23,11 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user_type']
 
 
-# ======================================================================
-# Profiles
-# ======================================================================
+class ClinicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Clinic
+        fields = '__all__'
+        read_only_fields = ['id']
 
 
 class DoctorProfileSerializer(serializers.ModelSerializer):
@@ -41,10 +50,40 @@ class NurseProfileSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['id']
 
+
 # ======================================================================
-# Custom serializers
+# Input Serializers (Para escritura: create/update/patch)
 # ======================================================================
 
+class UserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ['username', 'email', 'phone_number', 'birth_date']
+        extra_kwargs = {
+            'email': {'required': False},
+            'username': {'required': False},
+        }
+
+    def validate_email(self, value):
+        user = self.context['request'].user
+        if CustomUser.objects.exclude(pk=user.pk).filter(email=value).exists():
+            raise serializers.ValidationError(
+                validation_messages.EMAIL_ALREADY_EXISTS
+            )
+        return value
+
+    def validate_username(self, value):
+        user = self.context['request'].user
+        if CustomUser.objects.exclude(pk=user.pk).filter(username=value).exists():
+            raise serializers.ValidationError(
+               validation_messages.USERNAME_ALREADY_EXISTS
+            )
+        return value
+
+
+# ======================================================================
+# Auth & Account Serializers (Registro, cambio de contraseña, etc.)
+# ======================================================================
 
 class RegisterUserSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
@@ -54,21 +93,35 @@ class RegisterUserSerializer(serializers.Serializer):
 
     def validate_email(self, value):
         if CustomUser.objects.filter(email=value).exists():
-            raise serializers.ValidationError("Este correo ya está registrado.")
+            raise serializers.ValidationError(
+                validation_messages.EMAIL_ALREADY_EXISTS
+            )
         return value
 
     def validate_username(self, value):
         if CustomUser.objects.filter(username=value).exists():
-            raise serializers.ValidationError("Este nombre de usuario ya está en uso.")
+            raise serializers.ValidationError(
+                validation_messages.USERNAME_ALREADY_EXISTS
+            )
         return value
 
 
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(write_only=True)
     new_password = serializers.CharField(write_only=True)
+    confirm_new_password = serializers.CharField(write_only=True)
 
     def validate_old_password(self, value):
         user = self.context['request'].user
         if not user.check_password(value):
-            raise serializers.ValidationError("La contraseña actual es incorrecta.")
+            raise serializers.ValidationError(
+                validation_messages.CURRENT_PASSWORD_INCORRECT
+            )
         return value
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_new_password']:
+            raise serializers.ValidationError({
+                "confirm_new_password": validation_messages.PASSWORDS_NOT_MATCH
+            })
+        return attrs

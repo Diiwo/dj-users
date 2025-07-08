@@ -12,7 +12,7 @@ class CustomUserAdmin(BaseUserAdmin):
         (_('Role info'), {'fields': ('user_type',)}),
         (_('Agenda'), {'fields': ('agenda_token',)}),
         (_('Email confirmation'), {'fields': ('confirmation_token', 'is_email_confirmed')}),
-        (_('Estado general'), {'fields': ('universal_state', 'object_locked', 'lock_type')}),
+        (_('General state'), {'fields': ('universal_state', 'object_locked', 'lock_type')}),
         (_('Audit info'), {'fields': ('created_at', 'updated_at', 'created_by', 'updated_by')}),
         (_('Permissions'), {
             'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')

@@ -48,3 +48,9 @@ And you can have this microservice expose:
 - Password recovery
 - Profile management 
   Via API (via DRF, JWT, OAuth, etc.), communicating with your orchestrator or frontend.
+
+  # Locale generation (ej.):
+  ```bash
+  cd dj-users/dj_users
+  django-admin makemessages -l es --extension=py --ignore='*/migrations/*'
+  ```
