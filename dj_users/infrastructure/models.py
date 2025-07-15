@@ -11,7 +11,11 @@ from dj_core_utils.db.models import CoreBaseModel
 
 
 class CustomUser(AbstractUser, CoreBaseModel):
-    imagen = models.ImageField(upload_to='perfiles/', null=True, blank=True)
+    image = models.ImageField(
+        null=True,
+        blank=True,
+        upload_to='profiles/%Y/%m/%d/'
+    )
     phone_number = models.CharField(max_length=20, blank=True)
     email = models.EmailField(unique=True)
     agenda_token = models.UUIDField(default=uuid.uuid4, unique=True)
@@ -39,6 +43,11 @@ class Clinic(CoreBaseModel):
     address = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=20, blank=True)
 
+    class Meta:
+        app_label = 'dj_users'
+        verbose_name = _('Clinica')
+        verbose_name_plural = _('Clinicas')
+
     def __str__(self):
         return self.name
 
@@ -54,9 +63,9 @@ class DoctorProfile(CoreBaseModel):
         on_delete=models.PROTECT,
         null=True
     )
-    license_number = models.CharField(max_length=50)
-    kit_accepted = models.BooleanField(default=False)
+    professional_license_specialty = models.CharField(max_length=50, null=True, blank=True)
     professional_license = models.CharField(max_length=50)
+    kit_accepted = models.BooleanField(default=False)
     verificated = models.BooleanField(default=False)
     clinic = models.ForeignKey(
         Clinic,

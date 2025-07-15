@@ -3,6 +3,7 @@ from dj_users.infrastructure.models import (
     CustomUser,
     DoctorProfile,
     PatientProfile,
-    NurseProfile
+    NurseProfile, 
+    Clinic
 )
 

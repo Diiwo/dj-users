@@ -8,7 +8,7 @@ from dj_users.infrastructure.models import (
     DoctorProfile,
     PatientProfile,
     NurseProfile,
-    Clinic
+    Clinic,
 )
 
 
@@ -19,8 +19,57 @@ from dj_users.infrastructure.models import (
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
-        fields = ['id', 'username', 'email', 'user_type', 'phone_number', 'birth_date']
-        read_only_fields = ['id', 'user_type']
+        fields = [
+            'id',
+            'username',
+            'email',
+            'first_name',
+            'last_name',
+            'phone_number',
+            'birth_date',
+            'image',
+            'is_active',
+            'is_staff',
+            'user_type',
+            'is_email_confirmed',
+            'agenda_token',
+            'last_login',
+            'date_joined',
+            'universal_state',
+            'groups',
+            'user_permissions',
+        ]
+        read_only_fields = [
+            'id',
+            'user_type',
+            'agenda_token',
+            'is_email_confirmed',
+            'is_staff',
+            'is_active',
+            'last_login',
+            'date_joined',
+            'universal_state',
+            'created_at',
+            'updated_at',
+            'groups',
+            'user_permissions',
+        ]
+
+    def validate_email(self, value):
+        user = self.context['request'].user
+        if CustomUser.objects.exclude(pk=user.pk).filter(email=value).exists():
+            raise serializers.ValidationError(
+                validation_messages.EMAIL_ALREADY_EXISTS
+            )
+        return value
+
+    def validate_username(self, value):
+        user = self.context['request'].user
+        if CustomUser.objects.exclude(pk=user.pk).filter(username=value).exists():
+            raise serializers.ValidationError(
+               validation_messages.USERNAME_ALREADY_EXISTS
+            )
+        return value
 
 
 class ClinicSerializer(serializers.ModelSerializer):
@@ -56,13 +105,24 @@ class NurseProfileSerializer(serializers.ModelSerializer):
 # ======================================================================
 
 class UserUpdateSerializer(serializers.ModelSerializer):
+    image = serializers.ImageField(write_only=True, required=False)
+
     class Meta:
         model = CustomUser
-        fields = ['username', 'email', 'phone_number', 'birth_date']
+        fields = [
+            'username', 'email', 'phone_number', 'birth_date',
+            'first_name', 'last_name', 'image'
+        ]
         extra_kwargs = {
             'email': {'required': False},
             'username': {'required': False},
+            'first_name': {'required': False},
+            'last_name': {'required': False},
+            'phone_number': {'required': False},
+            'birth_date': {'required': False},
         }
+
+        read_only_fields = ['username']
 
     def validate_email(self, value):
         user = self.context['request'].user
@@ -72,24 +132,21 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             )
         return value
 
-    def validate_username(self, value):
-        user = self.context['request'].user
-        if CustomUser.objects.exclude(pk=user.pk).filter(username=value).exists():
-            raise serializers.ValidationError(
-               validation_messages.USERNAME_ALREADY_EXISTS
-            )
-        return value
-
 
 # ======================================================================
 # Auth & Account Serializers (Registro, cambio de contraseña, etc.)
 # ======================================================================
+
 
 class RegisterUserSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
     role = serializers.ChoiceField(choices=UserRole.choices)
+    first_name = serializers.CharField(max_length=150, required=False)
+    last_name = serializers.CharField(max_length=150, required=False)
+    phone_number = serializers.CharField(max_length=12, required=False)
+    birth_date = serializers.DateField(required=False)
 
     def validate_email(self, value):
         if CustomUser.objects.filter(email=value).exists():
@@ -125,3 +182,8 @@ class ChangePasswordSerializer(serializers.Serializer):
                 "confirm_new_password": validation_messages.PASSWORDS_NOT_MATCH
             })
         return attrs
+
+
+# ======================================================================
+# Custom
+# ======================================================================
