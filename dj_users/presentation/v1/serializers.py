@@ -1,7 +1,7 @@
 
 from rest_framework import serializers
 
-from dj_users.application.constants.messages import validation_messages
+from dj_users.application.constants.messages.validation_messages import ValidationMessages
 from dj_users.application.domain.roles import UserRole
 from dj_users.infrastructure.models import (
     CustomUser,
@@ -59,7 +59,7 @@ class UserSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         if CustomUser.objects.exclude(pk=user.pk).filter(email=value).exists():
             raise serializers.ValidationError(
-                validation_messages.EMAIL_ALREADY_EXISTS
+                ValidationMessages.User.EMAIL_ALREADY_EXISTS
             )
         return value
 
@@ -67,7 +67,7 @@ class UserSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         if CustomUser.objects.exclude(pk=user.pk).filter(username=value).exists():
             raise serializers.ValidationError(
-               validation_messages.USERNAME_ALREADY_EXISTS
+               ValidationMessages.User.USERNAME_ALREADY_EXISTS
             )
         return value
 
@@ -80,6 +80,8 @@ class ClinicSerializer(serializers.ModelSerializer):
 
 
 class DoctorProfileSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    
     class Meta:
         model = DoctorProfile
         fields = '__all__'
@@ -128,7 +130,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         if CustomUser.objects.exclude(pk=user.pk).filter(email=value).exists():
             raise serializers.ValidationError(
-                validation_messages.EMAIL_ALREADY_EXISTS
+                ValidationMessages.User.EMAIL_ALREADY_EXISTS
             )
         return value
 
@@ -151,14 +153,14 @@ class RegisterUserSerializer(serializers.Serializer):
     def validate_email(self, value):
         if CustomUser.objects.filter(email=value).exists():
             raise serializers.ValidationError(
-                validation_messages.EMAIL_ALREADY_EXISTS
+                ValidationMessages.User.EMAIL_ALREADY_EXISTS
             )
         return value
 
     def validate_username(self, value):
         if CustomUser.objects.filter(username=value).exists():
             raise serializers.ValidationError(
-                validation_messages.USERNAME_ALREADY_EXISTS
+                ValidationMessages.User.USERNAME_ALREADY_EXISTS
             )
         return value
 
@@ -172,14 +174,14 @@ class ChangePasswordSerializer(serializers.Serializer):
         user = self.context['request'].user
         if not user.check_password(value):
             raise serializers.ValidationError(
-                validation_messages.CURRENT_PASSWORD_INCORRECT
+                ValidationMessages.Password.CURRENT_PASSWORD_INCORRECT
             )
         return value
 
     def validate(self, attrs):
         if attrs['new_password'] != attrs['confirm_new_password']:
             raise serializers.ValidationError({
-                "confirm_new_password": validation_messages.PASSWORDS_NOT_MATCH
+                "confirm_new_password": ValidationMessages.Password.PASSWORDS_NOT_MATCH
             })
         return attrs
 

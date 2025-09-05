@@ -10,6 +10,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.db.models import Q
 
 from dj_users.application.domain.roles import UserRole
 
@@ -42,6 +43,7 @@ from dj_core_utils.presentation.mixins import (
     UniversalStateQuerysetMixin,
     UniversalStateSoftDeleteMixin,
 )
+from dj_core_utils.db.mixins import UniversalState
 
 # ======================================================================
 # UserViewSet - authenticated user management
@@ -57,6 +59,13 @@ class UserViewSet(
     permission_classes = [IsAuthenticated]
     queryset = CustomUser.objects.all()
     http_method_names = ['get', 'patch', 'post', 'head', 'options']
+    
+    # Add filtering and search capabilities
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['first_name', 'last_name', 'email', 'username']
+    filterset_fields = ['user_type', 'is_active', 'is_staff']
+    ordering_fields = ['date_joined', 'last_login', 'first_name', 'last_name']
+    ordering = ['-date_joined']
 
     serializer_class = UserSerializer
 
@@ -76,9 +85,26 @@ class UserViewSet(
     }
 
     def get_queryset(self):
-        return CustomUser.objects.filter(pk=self.request.user.pk)
+        user = self.request.user
+        
+        # Admin can see all users
+        if user.user_type == UserRole.ADMIN:
+            return CustomUser.objects.all()
+        # Doctor can see patients and other doctors
+        elif user.user_type == UserRole.DOCTOR:
+            return CustomUser.objects.filter(
+                Q(user_type__in=[UserRole.PATIENT, UserRole.DOCTOR]) |
+                Q(pk=user.pk)
+            )
+        # Regular users can only see themselves
+        else:
+            return CustomUser.objects.filter(pk=user.pk)
 
     def get_object(self):
+        # For detail views, return the requested object if user has permission
+        if hasattr(self, 'kwargs') and 'pk' in self.kwargs:
+            pk = self.kwargs['pk']
+            return self.get_queryset().get(pk=pk)
         return self.request.user
 
     def partial_update(self, request, *args, **kwargs):
@@ -96,10 +122,15 @@ class UserViewSet(
         return Response(self.get_serializer(updated_user).data)
 
     def list(self, request, *args, **kwargs):
-        return Response(
-            {"detail": ResponseMessages.User.NO_PERMISSION_TO_LIST_USERS},
-            status=status.HTTP_403_FORBIDDEN
-        )
+        # Only admins and doctors can list users
+        if request.user.user_type not in [UserRole.ADMIN, UserRole.DOCTOR]:
+            return Response(
+                {"detail": ResponseMessages.User.NO_PERMISSION_TO_LIST_USERS},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Use the default list implementation with our filtered queryset
+        return super().list(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return Response(
@@ -138,6 +169,43 @@ class UserViewSet(
                 data=serializer.validated_data
             )
             return Response(self.get_serializer(updated_user).data)
+
+    @action(detail=False, methods=['get'], url_path='my_data', url_name='my_data')
+    def my_data(self, request):
+        """Get current user data for frontend auth service"""
+        user = self.request.user
+        serializer = self.get_serializer(user)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='stats', url_name='user_stats')
+    def user_stats(self, request):
+        """Get user statistics - available for admins and doctors"""
+        user = request.user
+
+        # Only admins and doctors can access stats
+        if user.user_type not in [UserRole.ADMIN, UserRole.DOCTOR]:
+            return Response(
+                {"detail": "No tienes permisos para ver estadísticas"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Get accessible users based on role
+        accessible_users = self.get_queryset()
+
+        # Calculate stats
+        stats = {
+            'total_users': accessible_users.count(),
+            'total_patients': accessible_users.filter(user_type=UserRole.PATIENT).count(),
+            'total_doctors': accessible_users.filter(user_type=UserRole.DOCTOR).count(),
+            'total_nurses': accessible_users.filter(user_type=UserRole.NURSE).count(),
+            'total_admins': accessible_users.filter(
+                user_type=UserRole.ADMIN
+            ).count() if user.user_type == UserRole.ADMIN else 0,
+            'active_users': accessible_users.filter(is_active=True).count(),
+            'inactive_users': accessible_users.filter(is_active=False).count(),
+        }
+
+        return Response(stats, status=status.HTTP_200_OK)
 
 
 # ======================================================================
@@ -236,7 +304,7 @@ class AdminUserProfileViewSet(viewsets.ModelViewSet):
         if not model_serializer:
             return DoctorProfile.objects.none()
         (model, _) = model_serializer
-        return model.objects.filter(universal_state='active')
+        return model.objects.filter(universal_state=UniversalState.ACTIVE)
 
     def get_serializer_class(self):
         model_serializer = self._get_model_and_serializer()
@@ -256,6 +324,28 @@ class AdminUserProfileViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         return super().list(request, *args, **kwargs)
+
+    @action(detail=False, methods=['get'], url_path='stats', url_name='profile_stats')
+    def profile_stats(self, request):
+        """Get profile statistics for admin users"""
+        stats = {
+            'total_doctor_profiles': DoctorProfile.objects.filter(
+                universal_state=UniversalState.ACTIVE
+            ).count(),
+            'total_patient_profiles': PatientProfile.objects.filter(
+                universal_state=UniversalState.ACTIVE
+            ).count(),
+            'total_nurse_profiles': NurseProfile.objects.filter(
+                universal_state=UniversalState.ACTIVE
+            ).count(),
+            'total_profiles': (
+                DoctorProfile.objects.filter(universal_state=UniversalState.ACTIVE).count() +
+                PatientProfile.objects.filter(universal_state=UniversalState.ACTIVE).count() +
+                NurseProfile.objects.filter(universal_state=UniversalState.ACTIVE).count()
+            )
+        }
+
+        return Response(stats, status=status.HTTP_200_OK)
 
 
 # ======================================================================
